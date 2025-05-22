@@ -10,6 +10,8 @@ The goal of OpenDevin is to simulate a developer's workflow, including:
 - Generating execution plans based on a given task.
 - Basic debugging by observing command outputs.
 
+OpenDevin now utilizes the `smolagents` library to define and manage its core operations as discrete `Task` objects. This provides a more modular and extensible architecture. The agent, powered by Mistral AI for plan generation, translates these plans into a sequence of `smolagents` tasks for execution.
+
 This project is an exploration into automated software development processes.
 
 ## Mistral AI Integration
@@ -38,6 +40,7 @@ To enable this functionality, you need to provide your Mistral AI API key:
 The project relies on several Python packages. Key dependencies include:
 - `mistralai`: For interacting with the Mistral AI API.
 - `Flask`: For the web application interface.
+- `smolagents`: For structuring agent operations as discrete tasks.
 
 These and other necessary packages are listed in `requirements.txt`.
 

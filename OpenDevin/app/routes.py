@@ -76,19 +76,39 @@ def index():
                 # Ensure OpenDevin/src is in path or agent is installed
                 agent = OpenDevinAgent(task=task_input, api_key=api_key)
                 
-                # Generate plan
-                # Assuming generate_plan takes the task string as an argument
-                plan = agent.generate_plan(task_string=task_input) 
-                try:
-                    # Pretty print JSON for readability in HTML <pre> tag
-                    plan_str = json.dumps(plan, indent=4)
-                except TypeError: # Handle if plan is not JSON serializable (e.g. already a string)
-                    plan_str = str(plan)
+                # Ensure OpenDevin/src is in path or agent is installed
+                agent = OpenDevinAgent(task=task_input, api_key=api_key) # Instantiation
+                
+                # 1. Generate dictionary-based plan from Mistral AI
+                plan_dicts = agent.generate_plan(task_string=task_input)
+                
+                if plan_dicts:
+                    try:
+                        plan_str = json.dumps(plan_dicts, indent=4) # For display
+                    except TypeError:
+                        plan_str = str(plan_dicts) # Fallback
+                else:
+                    plan_str = "No plan generated or plan was empty (e.g., API error)."
+                    # Initialize execution_log_str as well, as there's nothing to execute
+                    execution_log_str = "Plan generation failed or resulted in an empty plan. Nothing to execute."
 
-                # Execute plan
-                # Modify execute_plan to return logs instead of just printing
-                execution_log = agent.execute_plan(plan) 
-                execution_log_str = "\n".join(execution_log)
+                # Proceed only if plan_dicts is not empty
+                if plan_dicts:
+                    # 2. Translate dictionary plan to Task objects
+                    # Ensure plan_dicts is not None and is a list before translating
+                    if isinstance(plan_dicts, list):
+                        task_objects = agent.translate_plan_to_tasks(plan_dicts)
+                    else: # Should not happen if generate_plan returns list or None/empty
+                        task_objects = agent.translate_plan_to_tasks([{"action": "error", "args": {"message": "Plan was not a list as expected."}}])
+                        if not plan_str or "No plan generated" in plan_str: # Update plan_str if it wasn't set to an error
+                             plan_str = json.dumps([{"action": "error", "args": {"message": "Plan was not a list as expected."}}], indent=4)
+
+
+                    # 3. Execute the list of Task objects
+                    # execute_plan now takes task_objects and returns aggregated logs.
+                    execution_log_list = agent.execute_plan(task_objects) 
+                    execution_log_str = "\n".join(execution_log_list)
+                # If plan_dicts was empty/None, execution_log_str is already set above.
 
             except ImportError as e:
                 flash(f"Error importing OpenDevinAgent: {e}. Make sure the agent source is correctly placed.", "error")

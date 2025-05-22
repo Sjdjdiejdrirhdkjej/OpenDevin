@@ -3,6 +3,8 @@ import subprocess
 import json
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
+from smolagents import Agent as SmolAgentBase
+from .tasks import CreateFileTask, PatchFileTask, ShellCommandTask, EchoTask, ErrorTask
 
 def create_file(filepath: str, content: str = ""):
     """
@@ -49,16 +51,18 @@ def patch_file(filepath: str, patch_content: str):
     with open(filepath, "w") as f:
         f.write(patch_content)
 
-class OpenDevinAgent:
-    def __init__(self, task: str, api_key: str = None):
+class OpenDevinAgent(SmolAgentBase):
+    def __init__(self, task: str, api_key: str = None, agent_name: str = "OpenDevinMistralAgent"):
         """
         Initializes the OpenDevin agent with a task and optionally an API key.
 
         Args:
             task (str): The task description for the agent.
             api_key (str, optional): Mistral AI API key. Defaults to None.
+            agent_name (str, optional): Name of the agent.
         """
-        self.task = task # Retain original task for potential other uses, but web UI will pass explicitly.
+        super().__init__(agent_name) # Initialize the SmolAgentBase
+        self.task = task # Overall goal for the agent
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
         self.client = None
 
@@ -66,12 +70,11 @@ class OpenDevinAgent:
             self.client = MistralClient(api_key=self.api_key)
         else:
             # This print will go to server logs, not web UI directly.
-            # Flash messages in routes.py are for UI feedback.
-            print("[WARNING]: Mistral AI API key not found for agent instance. Plan generation might fail or use fallback if UI doesn't enforce key presence.")
+            print(f"[WARNING] Agent {self.name}: Mistral AI API key not found. Plan generation might fail. Set MISTRAL_API_KEY.")
 
-    def generate_plan(self, task_string: str) -> list[dict]: # task_string is now the primary source for the plan
+    def generate_plan(self, task_string: str) -> list[dict]:
         """
-        Generates a plan based on the provided task string using Mistral AI.
+        Generates a plan (list of action dictionaries) based on the task_string using Mistral AI.
 
         Args:
             task_string (str): The description of the task. (This is now used directly)
@@ -81,8 +84,8 @@ class OpenDevinAgent:
         """
         if not self.client or not self.api_key: # Check API key specific to this agent instance
             error_msg = "Mistral AI API key not configured for this agent instance or client not initialized."
-            # Logging this error to server console. UI will get specific error message.
-            print(f"[ERROR_AGENT]: {error_msg}")
+            # Logging this error to server console.
+            print(f"[ERROR_AGENT] {self.name}: {error_msg}")
             return [{"action": "error", "args": {"message": error_msg}}]
 
         SYSTEM_PROMPT = """You are a helpful assistant that generates execution plans for a software development agent called OpenDevin.
@@ -115,120 +118,71 @@ If the task is too complex or vague, try to create a simple plan that reflects t
                 return plan
             except json.JSONDecodeError as e:
                 error_msg = f"Failed to parse AI response as JSON: {e}. Response: {ai_response_content}"
-                print(f"[ERROR_AGENT]: {error_msg}") # Log to server console
+                print(f"[ERROR_AGENT] {self.name}: {error_msg}")
                 return [{"action": "error", "args": {"message": error_msg}}]
         except Exception as e:
             error_msg = f"Error during Mistral AI API call: {e}"
-            print(f"[ERROR_AGENT]: {error_msg}") # Log to server console
+            print(f"[ERROR_AGENT] {self.name}: {error_msg}")
             return [{"action": "error", "args": {"message": error_msg}}]
 
-    def execute_plan(self, plan: list[dict]) -> list[str]:
-        """
-        Executes a given plan and returns a log of actions.
-
-        Args:
-            plan (list[dict]): A list of action dictionaries.
-        
-        Returns:
-            list[str]: A log of execution steps.
-        """
-        log_output = []
-        for action_item in plan:
-            action_type = action_item.get("action")
-            args = action_item.get("args", {})
-            
-            attempt_msg = f"Attempting action: {action_type} with args: {args}"
-            # Not printing this one as it's more of an internal state before actual execution attempt.
-            # It will be part of the log_output for the web UI.
-            log_output.append(attempt_msg)
+    def translate_plan_to_tasks(self, plan_dicts: list[dict]) -> list:
+        task_objects = []
+        for i, action_dict in enumerate(plan_dicts):
+            action_type = action_dict.get("action")
+            args = action_dict.get("args", {})
+            task_name = f"Task_{i+1}_{action_type}" # Example task name
 
             if action_type == "create_file":
-                filepath = str(args.get("filepath", "")).strip()
-                content = args.get("content", "")
-                if filepath:
-                    try:
-                        create_file(filepath, content)
-                        message = f"[CREATED]: {filepath}"
-                        print(message)
-                        log_output.append(message)
-                    except Exception as e:
-                        message = f"[ERROR_CREATE]: Could not create file {filepath}. Error: {e}"
-                        print(message)
-                        log_output.append(message)
-                else:
-                    message = "[ERROR_CREATE]: Missing filepath for create_file action."
-                    print(message)
-                    log_output.append(message)
+                task_objects.append(CreateFileTask(name=task_name, filepath=args.get("filepath"), content=args.get("content", "")))
             elif action_type == "patch_file":
-                filepath = args.get("filepath")
-                patch_content = args.get("patch_content")
-                if filepath and patch_content is not None:
-                    try:
-                        patch_file(filepath, patch_content)
-                        message = f"[PATCHED]: {filepath} with content: {patch_content[:50]}{'...' if len(patch_content) > 50 else ''}"
-                        print(message)
-                        log_output.append(message)
-                    except Exception as e:
-                        message = f"[ERROR_PATCH]: Could not patch file {filepath}. Error: {e}"
-                        print(message)
-                        log_output.append(message)
-                else:
-                    message = "[ERROR_PATCH]: Missing filepath or patch_content for patch_file action."
-                    print(message)
-                    log_output.append(message)
+                task_objects.append(PatchFileTask(name=task_name, filepath=args.get("filepath"), patch_content=args.get("patch_content")))
             elif action_type == "shell":
-                command = args.get("command")
-                if command:
-                    shell_cmd_msg = f"[SHELL]: {command}"
-                    print(shell_cmd_msg)
-                    log_output.append(shell_cmd_msg)
-                    try:
-                        stdout, stderr, rc = run_shell(command)
-                        
-                        stdout_msg = f"Stdout: {stdout.strip()}"
-                        print(stdout_msg)
-                        log_output.append(stdout_msg)
-                        
-                        stderr_msg = f"Stderr: {stderr.strip()}"
-                        print(stderr_msg)
-                        log_output.append(stderr_msg)
-                        
-                        rc_msg = f"Return Code: {rc}"
-                        print(rc_msg)
-                        log_output.append(rc_msg)
-                        
-                        if rc != 0 or (stderr and stderr.strip()):
-                            debug_message = "[DEBUGGING]: Error or non-zero return code detected during shell execution."
-                            print(debug_message)
-                            log_output.append(debug_message)
-                    except Exception as e:
-                        message = f"[ERROR_SHELL]: Command '{command}' failed. Error: {e}"
-                        print(message)
-                        log_output.append(message)
-                else:
-                    message = "[ERROR_SHELL]: Missing command for shell action."
-                    print(message)
-                    log_output.append(message)
+                task_objects.append(ShellCommandTask(name=task_name, command=args.get("command")))
             elif action_type == "echo":
-                message_content = args.get("message")
-                if message_content:
-                    message = f"[ECHO]: {message_content}"
-                    print(message)
-                    log_output.append(message)
-                else:
-                    message = "[ERROR_ECHO]: Missing message for echo action."
-                    print(message)
-                    log_output.append(message)
-            elif action_type == "error": # Action from plan itself is an error
-                error_message_content = args.get("message", "Unknown error from plan.")
-                message = f"[PLANNED_ERROR]: {error_message_content}"
-                print(message)
-                log_output.append(message)
+                task_objects.append(EchoTask(name=task_name, message=args.get("message")))
+            elif action_type == "error": # From plan generation itself
+                task_objects.append(ErrorTask(name=task_name, error_message=args.get("message", "Unknown error from plan generation")))
             else:
-                message = f"[WARNING]: Unknown action type encountered: {action_type}"
-                print(message)
-                log_output.append(message)
-        return log_output
+                print(f"[WARNING] Agent {self.name}: Unknown action type in plan dict: {action_type}. Creating an ErrorTask.")
+                task_objects.append(ErrorTask(name=task_name, error_message=f"Unknown action type: {action_type}"))
+        return task_objects
+
+    def perform_smol_task(self, task) -> dict:
+        # The task's execute method already prints to console.
+        # Here we just call it and return its structured result.
+        print(f"Agent {self.name} performing {task.name} ({task.__class__.__name__})") # Optional pre-task log from agent
+        result = task.execute(self) # `task.execute` handles its own console prints and builds its log
+        # Example: result = {"status": "success", "log": ["log line 1"], ...}
+        print(f"Agent {self.name} finished {task.name}. Status: {result.get('status')}") # Optional post-task log
+        return result
+
+    def execute_plan(self, tasks: list) -> list[str]: # tasks is now list of Task objects
+        all_logs = []
+        # This initial message is for CLI. Web UI gets logs from individual tasks.
+        cli_initial_message = "\nExecuting Smarter Plan (list of Task objects):"
+        print(cli_initial_message) 
+        all_logs.append(cli_initial_message) # For web UI to also have this marker
+
+        for task_object in tasks:
+            # perform_smol_task calls task.execute(), which prints to console.
+            # The result from task.execute() contains its own log list.
+            task_result = self.perform_smol_task(task_object)
+            
+            if task_result and isinstance(task_result.get("log"), list):
+                all_logs.extend(task_result["log"]) # Aggregate logs for web UI
+            else:
+                # Fallback if task_result or its log is not as expected
+                error_log_line = f"[AGENT_ERROR] Task {task_object.name} did not return a valid log list in its result."
+                print(error_log_line) # For CLI
+                all_logs.append(error_log_line)
+
+            if task_result.get("status") == "failure":
+                failure_message = f"[AGENT_INFO] Task {task_object.name} reported failure. Stopping plan execution."
+                print(failure_message) # For CLI
+                all_logs.append(failure_message)
+                break # Stop plan on first task failure
+        
+        return all_logs
 
     def run_task(self): # This method is more for command-line usage or direct invocation
         """
@@ -236,22 +190,31 @@ If the task is too complex or vague, try to create a simple plan that reflects t
         It generates a plan and then executes it, printing logs to console.
         This method is not directly used by the web UI, which calls generate_plan and execute_plan separately.
         """
-        print(f"Starting task (from self.task): {self.task}")
-        # Note: generate_plan now expects task_string as an argument.
-        # For this internal run_task, we'll use self.task.
-        plan = self.generate_plan(task_string=self.task) 
+        print(f"Agent {self.name} starting overall task: {self.task}") # self.task is the main goal
         
-        print("Generated Plan:")
-        for i, step in enumerate(plan):
-            # Using json.dumps for prettier printing of args if they are complex
-            args_str = json.dumps(step.get('args', {}))
-            print(f"  Step {i+1}: {step['action']} - Args: {args_str}")
+        plan_dicts = self.generate_plan(task_string=self.task) # Get dict plan from Mistral
+        print("\nGenerated Plan (from Mistral):")
+        for i, step_dict in enumerate(plan_dicts):
+            print(f"  Step {i+1}: {step_dict.get('action')} - {step_dict.get('args')}")
+
+        task_objects = self.translate_plan_to_tasks(plan_dicts)
+        # Optional: Print translated task objects for debugging
+        # print("\nTranslated to Task Objects:")
+        # for t_obj in task_objects:
+        #     print(f"  - {t_obj.name} ({t_obj.__class__.__name__})")
+
+        # execute_plan now takes task_objects and its internal calls print to console
+        # It also returns aggregated logs, which run_task (CLI) can optionally print if needed,
+        # but individual tasks already print.
+        returned_logs = self.execute_plan(task_objects) 
         
-        print("\nExecuting Plan (results to console):")
-        logs = self.execute_plan(plan)
-        for log_entry in logs:
-            print(log_entry)
-        print("\nTask finished.")
+        # If you want to see the aggregated logs from execute_plan in CLI (might be redundant as tasks print):
+        # print("\n--- Aggregated Logs (from execute_plan return) ---")
+        # for log_line in returned_logs:
+        #    print(log_line)
+        # print("--- End of Aggregated Logs ---")
+
+        print(f"\nAgent {self.name} finished overall task: {self.task}")
 
 if __name__ == '__main__':
     # Example Usage (optional, for testing purposes)
@@ -294,3 +257,5 @@ if __name__ == '__main__':
     print(f"Cleanup Stdout: {stdout.strip()}")
     print(f"Cleanup Stderr: {stderr.strip()}")
     print(f"Cleanup RC: {rc}")
+# No changes needed for filepath handling in this new structure as Tasks handle their own args.
+# The previous direct manipulation of filepath in execute_plan is removed.

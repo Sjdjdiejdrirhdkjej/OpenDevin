@@ -1,2 +1,3 @@
 mistralai
 Flask
+smolagents
