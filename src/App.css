@@ -1,0 +1,278 @@
+/* Global Resets and Base Styles */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f4f7f9;
+  color: #333;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+#root {
+  height: 100vh;
+  display: flex; /* Ensure #root also flexes if App is its direct child */
+}
+
+/* App.tsx Layout */
+.app-container {
+  display: flex;
+  height: 100vh; /* Changed from 100vh to 100% to fill #root */
+  width: 100%;
+  padding: 10px;
+  gap: 10px; /* Space between columns */
+}
+
+.chat-column {
+  flex: 1 1 35%; /* Flex-grow, flex-shrink, flex-basis */
+  min-width: 300px; /* Minimum width for chat column */
+  display: flex; /* To make ChatUI component fill this column */
+  flex-direction: column;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.workspace-column {
+  flex: 1 1 65%; /* Takes more space */
+  min-width: 400px; /* Minimum width for workspace */
+  display: flex; /* To make Workspace component fill this column */
+  flex-direction: column;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+/* ChatUI.tsx Styling */
+.chat-ui-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Fill the chat-column */
+  padding: 15px;
+}
+
+.chat-ui-title {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 1.5em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.message-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+  margin-bottom: 15px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.message {
+  margin-bottom: 12px;
+  padding: 10px 15px;
+  border-radius: 18px;
+  max-width: 80%;
+  line-height: 1.4;
+}
+
+.message.user {
+  background-color: #007bff;
+  color: white;
+  align-self: flex-end;
+  margin-left: auto; /* Pushes to the right */
+}
+
+.message.agent {
+  background-color: #e9ecef;
+  color: #333;
+  align-self: flex-start;
+  margin-right: auto; /* Pushes to the left */
+}
+
+.message-sender {
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+}
+
+.message-input-area {
+  display: flex;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.message-input {
+  flex-grow: 1;
+  padding: 10px 15px;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  margin-right: 10px;
+  font-size: 1em;
+}
+
+.send-button {
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.2s ease;
+}
+
+.send-button:hover {
+  background-color: #0056b3;
+}
+
+/* Workspace.tsx Styling */
+.workspace-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Fill the workspace-column */
+  padding: 15px;
+}
+
+.workspace-title {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 1.5em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.workspace-main-area {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden; /* Prevent children from overflowing parent */
+  gap: 15px; /* Space between file list/viewer and terminal sections if layout changes */
+}
+
+.file-list-pane {
+  width: 30%;
+  min-width: 150px;
+  border-right: 1px solid #ddd;
+  padding-right: 15px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-list-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #555;
+  font-size: 1.2em;
+}
+
+.file-list {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 0;
+  flex-grow: 1; /* Allows scrolling within this div */
+}
+
+.file-list-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-list-item:hover {
+  background-color: #e9ecef;
+}
+
+.file-list-item.selected {
+  background-color: #007bff;
+  color: white;
+}
+
+.file-list-item.selected:hover {
+  background-color: #0056b3;
+}
+
+.file-viewer-pane {
+  flex-grow: 1;
+  padding-left: 15px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto; /* If content itself doesn't scroll */
+}
+
+.file-viewer-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #555;
+  font-size: 1.2em;
+}
+
+.file-viewer-content {
+  background-color: #fdfdfd;
+  border: 1px solid #ddd;
+  padding: 15px;
+  flex-grow: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.file-viewer-placeholder {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777;
+  font-style: italic;
+  background-color: #fdfdfd;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.terminal-pane {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #ddd;
+  display: flex; /* Allow terminal-output to grow */
+  flex-direction: column;
+  min-height: 150px; /* Minimum height for terminal */
+  max-height: 300px; /* Maximum height for terminal before it scrolls internally */
+}
+
+.terminal-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #555;
+  font-size: 1.2em;
+}
+
+.terminal-output {
+  background-color: #222; /* Dark background */
+  color: #0f0; /* Green text */
+  padding: 15px;
+  flex-grow: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}

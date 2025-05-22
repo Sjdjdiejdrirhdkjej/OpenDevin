@@ -21,33 +21,29 @@ const Workspace: React.FC<WorkspaceProps> = ({
   terminalOutput,
   selectedFileContent,
   onFileSelect,
+  // selectedFileName prop is needed to determine which file is selected for styling
+  // This was not explicitly in the original props but is implied by "visual indicator for selected file"
+  // Let's assume selectedFileName is passed down from App.tsx (it is already being managed there)
+  selectedFileName, 
 }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', border: '1px solid #ccc', borderRadius: '8px', padding: '10px', backgroundColor: '#f9f9f9' }}>
-      <h2 style={{ textAlign: 'center', marginTop: 0, marginBottom: '10px', color: '#333' }}>Workspace</h2>
+    <div className="workspace-container">
+      <h2 className="workspace-title">Workspace</h2>
       
-      <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+      <div className="workspace-main-area">
         {/* File List Pane */}
-        <div style={{ width: '30%', borderRight: '1px solid #ddd', paddingRight: '10px', overflowY: 'auto' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#555' }}>Files</h3>
+        <div className="file-list-pane">
+          <h3 className="file-list-title">Files</h3>
           {files.length === 0 ? (
-            <p style={{ color: '#777', fontStyle: 'italic' }}>No files in workspace.</p>
+            <p style={{ color: '#777', fontStyle: 'italic' }}>No files in workspace.</p> // Inline style for simple placeholder
           ) : (
-            <ul style={{ listStyleType: 'none', paddingLeft: 0, margin: 0 }}>
+            <ul className="file-list">
               {files.map(file => (
                 <li 
                   key={file.name} 
                   onClick={() => onFileSelect(file.name)}
-                  style={{ 
-                    padding: '8px', 
-                    cursor: 'pointer', 
-                    borderRadius: '4px',
-                    marginBottom: '5px',
-                    backgroundColor: selectedFileContent && file.content === selectedFileContent ? '#007bff' : 'transparent', // A simple way to highlight, assumes content is unique for selected file
-                    color: selectedFileContent && file.content === selectedFileContent ? 'white' : '#333',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = selectedFileContent && file.content === selectedFileContent ? '#0056b3' :'#e9ecef')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = selectedFileContent && file.content === selectedFileContent ? '#007bff' : 'transparent')}
+                  // Apply 'file-list-item' and conditional 'selected' class
+                  className={`file-list-item ${file.name === selectedFileName ? 'selected' : ''}`}
                 >
                   {file.name}
                 </li>
@@ -57,24 +53,14 @@ const Workspace: React.FC<WorkspaceProps> = ({
         </div>
 
         {/* File Viewer Pane */}
-        <div style={{ flexGrow: 1, paddingLeft: '10px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#555' }}>File Viewer</h3>
+        <div className="file-viewer-pane">
+          <h3 className="file-viewer-title">File Viewer</h3>
           {selectedFileContent !== null ? (
-            <pre style={{ 
-              backgroundColor: '#fff', 
-              border: '1px solid #ddd', 
-              padding: '10px', 
-              flexGrow: 1, 
-              overflowY: 'auto', 
-              whiteSpace: 'pre-wrap', // Ensure text wraps
-              wordBreak: 'break-all', // Ensure long words break
-              borderRadius: '4px',
-              margin: 0,
-            }}>
+            <pre className="file-viewer-content">
               {selectedFileContent}
             </pre>
           ) : (
-            <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#777', fontStyle: 'italic' }}>
+            <div className="file-viewer-placeholder">
               Select a file to view its content.
             </div>
           )}
@@ -82,20 +68,9 @@ const Workspace: React.FC<WorkspaceProps> = ({
       </div>
 
       {/* Terminal Output Pane */}
-      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' }}>
-        <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#555' }}>Terminal</h3>
-        <pre style={{ 
-          backgroundColor: '#222', 
-          color: '#0f0', // Classic green terminal text
-          padding: '10px', 
-          height: '150px', 
-          overflowY: 'auto', 
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-          borderRadius: '4px',
-          margin: 0,
-          fontFamily: 'monospace'
-        }}>
+      <div className="terminal-pane">
+        <h3 className="terminal-title">Terminal</h3>
+        <pre className="terminal-output">
           {terminalOutput || 'No terminal output yet.'}
         </pre>
       </div>

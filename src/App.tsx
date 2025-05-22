@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ChatUI, { Message } from '../components/ChatUI';
 import Workspace, { WorkspaceFile } from '../components/Workspace';
 import { Agent, AgentAction } from '../agent/Agent'; // Import Agent and AgentAction
+import './App.css'; // Import the CSS file
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -47,46 +48,103 @@ const App: React.FC = () => {
         });
         break;
       case 'shell':
-        addNewMessage('agent', `Agent: Executing command "${action.command}"...`);
-        let cmdOutput = '';
-        const parts = action.command.split(' ');
-        const cmd = parts[0];
-        const arg = parts.slice(1).join(' ');
+        {
+          addNewMessage('agent', `Agent: Executing command "${action.command}"...`);
+          let cmdOutput = '';
+          const fullCommand = action.command;
+          const commandParts = fullCommand.split(' ');
+          const baseCmd = commandParts[0];
+          const args = commandParts.slice(1);
+          const firstArg = args[0]; // Could be undefined
+          const remainingArgs = args.slice(1); // Could be empty
 
-        if (cmd === 'ls') {
-          cmdOutput = files.length > 0 ? files.map(f => f.name).join('\n') : '(empty directory)';
-        } else if (cmd === 'cat') {
-          const fileToCat = files.find(f => f.name === arg);
-          cmdOutput = fileToCat ? fileToCat.content : `cat: ${arg}: No such file or directory`;
-        } else if (cmd === 'echo') {
-          cmdOutput = arg;
-        } else {
-          cmdOutput = `Command not recognized or not supported in simulation: ${action.command}`;
+          if (baseCmd === 'ls') {
+            if (!firstArg || firstArg === '.') {
+              cmdOutput = files.length > 0 ? files.map(f => f.name).join('\n') : '(empty directory)';
+            } else {
+              // Basic simulation: if ls has an argument, assume it's a path.
+              // We don't have real directories, so we'll filter files that "start with" the path.
+              const pathPrefix = firstArg.endsWith('/') ? firstArg : `${firstArg}/`;
+              const dirFiles = files.filter(f => f.name.startsWith(pathPrefix));
+              if (dirFiles.length > 0) {
+                cmdOutput = dirFiles.map(f => f.name.substring(pathPrefix.length) || f.name).join('\n');
+              } else {
+                // Check if 'firstArg' itself is a file or a simulated directory (if we add that later)
+                const exactMatchFile = files.find(f => f.name === firstArg);
+                if (exactMatchFile) {
+                  cmdOutput = exactMatchFile.name; // ls on a file name just lists the file name
+                } else {
+                  cmdOutput = `ls: cannot access '${firstArg}': No such file or directory (or directory is empty)`;
+                }
+              }
+            }
+          } else if (baseCmd === 'cat') {
+            if (!firstArg) {
+              cmdOutput = 'cat: missing filename';
+            } else {
+              const fileToCat = files.find(f => f.name === firstArg);
+              cmdOutput = fileToCat ? fileToCat.content : `cat: ${firstArg}: No such file or directory`;
+            }
+          } else if (baseCmd === 'echo') {
+            // The agent passes the full string after `echo ` (if any) as part of `action.command`.
+            // So, action.command might be "echo hello world" or "echo \"quoted text\"".
+            // We just need to take the substring after "echo ".
+            cmdOutput = fullCommand.substring(baseCmd.length + 1).trim(); // +1 for the space
+          } else if (baseCmd === 'mkdir') {
+            if (!firstArg) {
+              cmdOutput = 'mkdir: missing operand';
+            } else {
+              // For now, just a message. No actual directory creation in files state.
+              // We could validate dirname (e.g. no slashes, not existing file name)
+              if (files.some(f => f.name === firstArg || f.name.startsWith(`${firstArg}/`))) {
+                cmdOutput = `mkdir: cannot create directory ‘${firstArg}’: File or directory exists`;
+              } else {
+                cmdOutput = `Directory "${firstArg}" created successfully. (Simulated: no actual change in file system yet)`;
+                 // Optional: Add a simulated directory entry if desired for 'ls'
+                 // setFiles(prevFiles => [...prevFiles, { name: `${firstArg}/`, content: '', type: 'directory' }]);
+              }
+            }
+          } else if (baseCmd === 'pwd') {
+            cmdOutput = '/app/simulated_root';
+          } else if (baseCmd === 'clear') {
+            setTerminalOutput(''); // Clear the terminal output directly
+            addNewMessage('agent', 'Agent: Terminal cleared.');
+            // No cmdOutput needed as the terminal itself is cleared.
+            // We break early to avoid appending to terminalOutput.
+            return; // Important to return to avoid default terminal output handling
+          }
+          else {
+            cmdOutput = `Command not found: ${fullCommand}`;
+          }
+          setTerminalOutput(prev => `${prev}\n$ ${fullCommand}\n${cmdOutput}\n`);
+          
+          // Refined chat message for shell command errors
+          const isErrorOutput = /No such file|Command not found|missing operand|cannot access|cannot create directory/i.test(cmdOutput);
+          const chatMessagePrefix = isErrorOutput ? `Agent: Error executing command "${fullCommand}":` : `Agent: Command output for "${fullCommand}":`;
+          addNewMessage('agent', `${chatMessagePrefix}\n${cmdOutput}`);
         }
-        setTerminalOutput(prev => `${prev}\n$ ${action.command}\n${cmdOutput}\n`);
-        addNewMessage('agent', `Agent: Command output:\n${cmdOutput}`);
         break;
       case 'patch_file':
-        addNewMessage('agent', `Agent: Patching file "${action.fileName}"...`);
-        let patched = false;
+        addNewMessage('agent', `Agent: Attempting to patch file "${action.fileName}"...`);
+        let filePatched = false;
         setFiles(prevFiles =>
           prevFiles.map(file => {
             if (file.name === action.fileName) {
-              // Simple append for this simulation. Real patching is complex.
-              const updatedContent = file.content + '\n# Patch Applied:\n' + action.patchContent;
+              // Replace the entire content with the patchContent
+              const updatedContent = action.patchContent;
               if (file.name === selectedFileName) {
                 setSelectedFileContent(updatedContent);
               }
-              patched = true;
+              filePatched = true;
               return { ...file, content: updatedContent };
             }
             return file;
           })
         );
-        if (patched) {
-          addNewMessage('agent', `Agent: File "${action.fileName}" patched.`);
+        if (filePatched) {
+          addNewMessage('agent', `Agent: File "${action.fileName}" patched successfully.`);
         } else {
-          addNewMessage('agent', `Agent: File "${action.fileName}" not found for patching.`);
+          addNewMessage('agent', `Agent: Error patching. File "${action.fileName}" not found.`);
         }
         break;
       case 'message':
@@ -155,18 +213,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      <div style={{ flex: 1, padding: '10px' }}>
+    <div className="app-container"> {/* Use className for App.css styling */}
+      <div className="chat-column"> {/* Use className */}
         <ChatUI messages={messages} onSendMessage={handleSendMessage} />
       </div>
-      <div style={{ flex: 2, padding: '10px' }}>
+      <div className="workspace-column"> {/* Use className */}
         <Workspace 
           files={files} 
           terminalOutput={terminalOutput}
           selectedFileContent={selectedFileContent}
+          selectedFileName={selectedFileName} // Pass selectedFileName
           onFileSelect={handleFileSelect}
-          {/* Workspace props are: files, terminalOutput, selectedFileContent, onFileSelect */}
-          {/* onExecuteCommand and onFileUpdate are App functions, not directly passed to Workspace unless Workspace is enhanced */}
         />
       </div>
     </div>

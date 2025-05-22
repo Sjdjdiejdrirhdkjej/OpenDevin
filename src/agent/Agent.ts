@@ -68,10 +68,12 @@ export class Agent {
       const patchContent = patchFileMatch[2]; // patchContent includes newlines etc.
       action = { type: 'patch_file', fileName, patchContent };
     } else {
-      // Default action: echo back or send a generic message
-      action = { type: 'message', text: `Agent received: "${messageText}"` };
+      // Command not recognized by any regex
+      action = { type: 'message', text: `Agent: Error - Unrecognized command or syntax: "${messageText}"` };
     }
 
+    // Ensure action is always non-null before calling onAgentAction
+    // Though in current logic, 'action' will always be assigned.
     if (action) {
       this.onAgentAction(action);
     } else {
