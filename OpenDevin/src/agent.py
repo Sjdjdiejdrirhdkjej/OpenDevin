@@ -12,7 +12,9 @@ def create_file(filepath: str, content: str = ""):
         filepath (str): The path to the file to be created.
         content (str, optional): The content to write to the file. Defaults to "".
     """
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    dir_path = os.path.dirname(filepath)
+    if dir_path: # Check if dir_path is not an empty string
+        os.makedirs(dir_path, exist_ok=True)
     with open(filepath, "w") as f:
         f.write(content)
 
@@ -40,7 +42,9 @@ def patch_file(filepath: str, patch_content: str):
         filepath (str): The path to the file to be patched.
         patch_content (str): The content to write to the file.
     """
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    dir_path = os.path.dirname(filepath)
+    if dir_path: # Check if dir_path is not an empty string
+        os.makedirs(dir_path, exist_ok=True)
     with open(filepath, "w") as f:
         f.write(patch_content)
 
