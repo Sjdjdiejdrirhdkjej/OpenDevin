@@ -1,7 +1,7 @@
 print("Starting OpenDevin Agent demonstration...")
 
 # Assuming OpenDevin directory is in PYTHONPATH or script is run from OpenDevin/
-from src.agent import OpenDevinAgent
+from agent import OpenDevinAgent
 
 if __name__ == "__main__":
     # Instantiate the agent with a specific task
