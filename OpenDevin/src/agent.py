@@ -15,7 +15,9 @@ def create_file(filepath: str, content: str = ""):
         filepath (str): The path to the file to be created.
         content (str, optional): The content to write to the file. Defaults to "".
     """
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    dir_name = os.path.dirname(filepath)
+    if dir_name:  # Only call makedirs if dir_name is not an empty string
+        os.makedirs(dir_name, exist_ok=True)
     with open(filepath, "w") as f:
         f.write(content)
 
@@ -141,7 +143,7 @@ If the task is too complex or vague, try to create a simple plan that reflects t
             log_output.append(attempt_msg)
 
             if action_type == "create_file":
-                filepath = args.get("filepath")
+                filepath = str(args.get("filepath", "")).strip()
                 content = args.get("content", "")
                 if filepath:
                     try:
