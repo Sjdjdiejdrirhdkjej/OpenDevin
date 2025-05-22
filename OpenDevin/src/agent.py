@@ -134,7 +134,11 @@ If the task is too complex or vague, try to create a simple plan that reflects t
         for action_item in plan:
             action_type = action_item.get("action")
             args = action_item.get("args", {})
-            log_output.append(f"Attempting action: {action_type} with args: {args}")
+            
+            attempt_msg = f"Attempting action: {action_type} with args: {args}"
+            # Not printing this one as it's more of an internal state before actual execution attempt.
+            # It will be part of the log_output for the web UI.
+            log_output.append(attempt_msg)
 
             if action_type == "create_file":
                 filepath = args.get("filepath")
@@ -142,48 +146,86 @@ If the task is too complex or vague, try to create a simple plan that reflects t
                 if filepath:
                     try:
                         create_file(filepath, content)
-                        log_output.append(f"[CREATED]: {filepath}")
+                        message = f"[CREATED]: {filepath}"
+                        print(message)
+                        log_output.append(message)
                     except Exception as e:
-                        log_output.append(f"[ERROR_CREATE]: Could not create file {filepath}. Error: {e}")
+                        message = f"[ERROR_CREATE]: Could not create file {filepath}. Error: {e}"
+                        print(message)
+                        log_output.append(message)
                 else:
-                    log_output.append("[ERROR_CREATE]: Missing filepath for create_file action.")
+                    message = "[ERROR_CREATE]: Missing filepath for create_file action."
+                    print(message)
+                    log_output.append(message)
             elif action_type == "patch_file":
                 filepath = args.get("filepath")
                 patch_content = args.get("patch_content")
                 if filepath and patch_content is not None:
                     try:
                         patch_file(filepath, patch_content)
-                        log_output.append(f"[PATCHED]: {filepath} with content: {patch_content[:50]}{'...' if len(patch_content) > 50 else ''}")
+                        message = f"[PATCHED]: {filepath} with content: {patch_content[:50]}{'...' if len(patch_content) > 50 else ''}"
+                        print(message)
+                        log_output.append(message)
                     except Exception as e:
-                        log_output.append(f"[ERROR_PATCH]: Could not patch file {filepath}. Error: {e}")
+                        message = f"[ERROR_PATCH]: Could not patch file {filepath}. Error: {e}"
+                        print(message)
+                        log_output.append(message)
                 else:
-                    log_output.append("[ERROR_PATCH]: Missing filepath or patch_content for patch_file action.")
+                    message = "[ERROR_PATCH]: Missing filepath or patch_content for patch_file action."
+                    print(message)
+                    log_output.append(message)
             elif action_type == "shell":
                 command = args.get("command")
                 if command:
-                    log_output.append(f"[SHELL]: {command}")
+                    shell_cmd_msg = f"[SHELL]: {command}"
+                    print(shell_cmd_msg)
+                    log_output.append(shell_cmd_msg)
                     try:
                         stdout, stderr, rc = run_shell(command)
-                        log_output.append(f"Stdout: {stdout.strip()}")
-                        log_output.append(f"Stderr: {stderr.strip()}")
-                        log_output.append(f"Return Code: {rc}")
-                        if rc != 0 or stderr: # Considering stderr output as a sign of potential issue too
-                            log_output.append("[DEBUGGING]: Error or non-zero return code detected during shell execution.")
+                        
+                        stdout_msg = f"Stdout: {stdout.strip()}"
+                        print(stdout_msg)
+                        log_output.append(stdout_msg)
+                        
+                        stderr_msg = f"Stderr: {stderr.strip()}"
+                        print(stderr_msg)
+                        log_output.append(stderr_msg)
+                        
+                        rc_msg = f"Return Code: {rc}"
+                        print(rc_msg)
+                        log_output.append(rc_msg)
+                        
+                        if rc != 0 or (stderr and stderr.strip()):
+                            debug_message = "[DEBUGGING]: Error or non-zero return code detected during shell execution."
+                            print(debug_message)
+                            log_output.append(debug_message)
                     except Exception as e:
-                        log_output.append(f"[ERROR_SHELL]: Command '{command}' failed. Error: {e}")
+                        message = f"[ERROR_SHELL]: Command '{command}' failed. Error: {e}"
+                        print(message)
+                        log_output.append(message)
                 else:
-                    log_output.append("[ERROR_SHELL]: Missing command for shell action.")
+                    message = "[ERROR_SHELL]: Missing command for shell action."
+                    print(message)
+                    log_output.append(message)
             elif action_type == "echo":
-                message = args.get("message")
-                if message:
-                    log_output.append(f"[ECHO]: {message}")
+                message_content = args.get("message")
+                if message_content:
+                    message = f"[ECHO]: {message_content}"
+                    print(message)
+                    log_output.append(message)
                 else:
-                    log_output.append("[ERROR_ECHO]: Missing message for echo action.")
+                    message = "[ERROR_ECHO]: Missing message for echo action."
+                    print(message)
+                    log_output.append(message)
             elif action_type == "error": # Action from plan itself is an error
-                message = args.get("message", "Unknown error from plan.")
-                log_output.append(f"[PLANNED_ERROR]: {message}")
+                error_message_content = args.get("message", "Unknown error from plan.")
+                message = f"[PLANNED_ERROR]: {error_message_content}"
+                print(message)
+                log_output.append(message)
             else:
-                log_output.append(f"[WARNING]: Unknown action type encountered: {action_type}")
+                message = f"[WARNING]: Unknown action type encountered: {action_type}"
+                print(message)
+                log_output.append(message)
         return log_output
 
     def run_task(self): # This method is more for command-line usage or direct invocation
