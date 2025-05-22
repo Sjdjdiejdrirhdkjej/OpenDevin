@@ -56,28 +56,31 @@ class OpenDevinAgent:
             task (str): The task description for the agent.
             api_key (str, optional): Mistral AI API key. Defaults to None.
         """
-        self.task = task
+        self.task = task # Retain original task for potential other uses, but web UI will pass explicitly.
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
         self.client = None
 
         if self.api_key:
             self.client = MistralClient(api_key=self.api_key)
         else:
-            print("[WARNING]: Mistral AI API key not found. Plan generation will be skipped. Set MISTRAL_API_KEY environment variable.")
+            # This print will go to server logs, not web UI directly.
+            # Flash messages in routes.py are for UI feedback.
+            print("[WARNING]: Mistral AI API key not found for agent instance. Plan generation might fail or use fallback if UI doesn't enforce key presence.")
 
-    def generate_plan(self, task_string: str) -> list[dict]:
+    def generate_plan(self, task_string: str) -> list[dict]: # task_string is now the primary source for the plan
         """
         Generates a plan based on the provided task string using Mistral AI.
 
         Args:
-            task_string (str): The description of the task.
+            task_string (str): The description of the task. (This is now used directly)
 
         Returns:
             list[dict]: A list of action dictionaries representing the plan.
         """
-        if not self.client or not self.api_key:
-            error_msg = "Mistral AI API key not configured or client not initialized."
-            print(f"[ERROR]: {error_msg}")
+        if not self.client or not self.api_key: # Check API key specific to this agent instance
+            error_msg = "Mistral AI API key not configured for this agent instance or client not initialized."
+            # Logging this error to server console. UI will get specific error message.
+            print(f"[ERROR_AGENT]: {error_msg}")
             return [{"action": "error", "args": {"message": error_msg}}]
 
         SYSTEM_PROMPT = """You are a helpful assistant that generates execution plans for a software development agent called OpenDevin.
@@ -110,80 +113,100 @@ If the task is too complex or vague, try to create a simple plan that reflects t
                 return plan
             except json.JSONDecodeError as e:
                 error_msg = f"Failed to parse AI response as JSON: {e}. Response: {ai_response_content}"
-                print(f"[ERROR]: {error_msg}")
+                print(f"[ERROR_AGENT]: {error_msg}") # Log to server console
                 return [{"action": "error", "args": {"message": error_msg}}]
         except Exception as e:
             error_msg = f"Error during Mistral AI API call: {e}"
-            print(f"[ERROR]: {error_msg}")
+            print(f"[ERROR_AGENT]: {error_msg}") # Log to server console
             return [{"action": "error", "args": {"message": error_msg}}]
 
-    def execute_plan(self, plan: list[dict]):
+    def execute_plan(self, plan: list[dict]) -> list[str]:
         """
-        Executes a given plan.
+        Executes a given plan and returns a log of actions.
 
         Args:
             plan (list[dict]): A list of action dictionaries.
+        
+        Returns:
+            list[str]: A log of execution steps.
         """
+        log_output = []
         for action_item in plan:
             action_type = action_item.get("action")
             args = action_item.get("args", {})
+            log_output.append(f"Attempting action: {action_type} with args: {args}")
 
             if action_type == "create_file":
                 filepath = args.get("filepath")
                 content = args.get("content", "")
                 if filepath:
-                    create_file(filepath, content)
-                    print(f"[CREATED]: {filepath}")
+                    try:
+                        create_file(filepath, content)
+                        log_output.append(f"[CREATED]: {filepath}")
+                    except Exception as e:
+                        log_output.append(f"[ERROR_CREATE]: Could not create file {filepath}. Error: {e}")
                 else:
-                    print("[ERROR]: Missing filepath for create_file action.")
+                    log_output.append("[ERROR_CREATE]: Missing filepath for create_file action.")
             elif action_type == "patch_file":
                 filepath = args.get("filepath")
                 patch_content = args.get("patch_content")
                 if filepath and patch_content is not None:
-                    patch_file(filepath, patch_content)
-                    print(f"[PATCHED]: {filepath} with content: {patch_content[:50]}{'...' if len(patch_content) > 50 else ''}")
+                    try:
+                        patch_file(filepath, patch_content)
+                        log_output.append(f"[PATCHED]: {filepath} with content: {patch_content[:50]}{'...' if len(patch_content) > 50 else ''}")
+                    except Exception as e:
+                        log_output.append(f"[ERROR_PATCH]: Could not patch file {filepath}. Error: {e}")
                 else:
-                    print("[ERROR]: Missing filepath or patch_content for patch_file action.")
+                    log_output.append("[ERROR_PATCH]: Missing filepath or patch_content for patch_file action.")
             elif action_type == "shell":
                 command = args.get("command")
                 if command:
-                    print(f"[SHELL]: {command}")
-                    stdout, stderr, rc = run_shell(command)
-                    print(f"Stdout: {stdout.strip()}")
-                    print(f"Stderr: {stderr.strip()}")
-                    print(f"Return Code: {rc}")
-                    if rc != 0 or stderr:
-                        print("[DEBUGGING]: Error detected during shell execution.")
+                    log_output.append(f"[SHELL]: {command}")
+                    try:
+                        stdout, stderr, rc = run_shell(command)
+                        log_output.append(f"Stdout: {stdout.strip()}")
+                        log_output.append(f"Stderr: {stderr.strip()}")
+                        log_output.append(f"Return Code: {rc}")
+                        if rc != 0 or stderr: # Considering stderr output as a sign of potential issue too
+                            log_output.append("[DEBUGGING]: Error or non-zero return code detected during shell execution.")
+                    except Exception as e:
+                        log_output.append(f"[ERROR_SHELL]: Command '{command}' failed. Error: {e}")
                 else:
-                    print("[ERROR]: Missing command for shell action.")
+                    log_output.append("[ERROR_SHELL]: Missing command for shell action.")
             elif action_type == "echo":
                 message = args.get("message")
                 if message:
-                    print(f"[ECHO]: {message}")
+                    log_output.append(f"[ECHO]: {message}")
                 else:
-                    print("[ERROR]: Missing message for echo action.")
-            elif action_type == "error":
-                message = args.get("message")
-                if message:
-                    print(f"[EXECUTION ERROR]: {message}")
-                else:
-                    print("[EXECUTION ERROR]: Unknown error from plan.")
+                    log_output.append("[ERROR_ECHO]: Missing message for echo action.")
+            elif action_type == "error": # Action from plan itself is an error
+                message = args.get("message", "Unknown error from plan.")
+                log_output.append(f"[PLANNED_ERROR]: {message}")
             else:
-                print(f"[WARNING]: Unknown action type: {action_type}")
+                log_output.append(f"[WARNING]: Unknown action type encountered: {action_type}")
+        return log_output
 
-    def run_task(self):
+    def run_task(self): # This method is more for command-line usage or direct invocation
         """
-        Runs the task assigned to the agent.
-        It generates a plan and then executes it.
+        Runs the task assigned to the agent (self.task).
+        It generates a plan and then executes it, printing logs to console.
+        This method is not directly used by the web UI, which calls generate_plan and execute_plan separately.
         """
-        print(f"Starting task: {self.task}")
-        plan = self.generate_plan(self.task)
+        print(f"Starting task (from self.task): {self.task}")
+        # Note: generate_plan now expects task_string as an argument.
+        # For this internal run_task, we'll use self.task.
+        plan = self.generate_plan(task_string=self.task) 
+        
         print("Generated Plan:")
         for i, step in enumerate(plan):
-            print(f"  Step {i+1}: {step['action']} - {step['args']}")
+            # Using json.dumps for prettier printing of args if they are complex
+            args_str = json.dumps(step.get('args', {}))
+            print(f"  Step {i+1}: {step['action']} - Args: {args_str}")
         
-        print("\nExecuting Plan:")
-        self.execute_plan(plan)
+        print("\nExecuting Plan (results to console):")
+        logs = self.execute_plan(plan)
+        for log_entry in logs:
+            print(log_entry)
         print("\nTask finished.")
 
 if __name__ == '__main__':
@@ -203,23 +226,27 @@ if __name__ == '__main__':
     print("-" * 20)
     
     # Test case 3: Agent without API Key (to test fallback)
-    # Temporarily unset api_key for this test, assuming it might have been picked from env
-    print("Testing agent behavior without API key (if it was set via env, this test won't reflect true no-key scenario unless env var is also unset):")
-    agent3 = OpenDevinAgent(task="this task will fail plan generation", api_key="INVALID_KEY_OR_NONE") # Force client to be None or fail
-    # A bit of a hack: if it was picked from env, self.client might still be valid
-    # For a true test, one would need to run this in an env without MISTRAL_API_KEY
-    if os.getenv("MISTRAL_API_KEY"):
-        print("NOTE: MISTRAL_API_KEY is set in environment. For a true 'no API key' test, unset it.")
-    agent3.client = None # Ensure client is None for this specific test instance
-    agent3.api_key = None # Ensure api_key is None
-    agent3.run_task()
+    # This test is for the console `run_task` method.
+    # The web UI will use session-based API key.
+    print("Testing agent behavior without API key (for console run_task):")
+    # Create a new agent instance specifically for this test, without providing an API key
+    # and ensuring it doesn't pick one up from a potentially set environment variable for this test.
+    agent3_no_key = OpenDevinAgent(task="this task will show API key error in plan", api_key=None) # Explicitly None
+    agent3_no_key.client = None # Force client to be None
+    agent3_no_key.api_key = None # Force api_key to be None
+    agent3_no_key.run_task() # This will call generate_plan, which should return an error plan
     print("-" * 20)
 
     # Test case 4: Cleanup created files (manual for now)
     # Example of using run_shell directly for cleanup if needed
-    print("Cleaning up created files (if any)...")
-    # Adjust rm command based on expected files from AI-generated plans
-    stdout, stderr, rc = run_shell("rm hello.py snake_game.py script_1_to_10.py story.txt numbers.py || true")
+    print("Cleaning up created files (if any from __main__ tests)...")
+    # Adjust rm command based on expected files from AI-generated plans or specific tests
+    # Note: hello.py, snake_game.py were from older versions.
+    # script_1_to_10.py, story.txt, numbers.py might be from AI tasks.
+    # output.txt might be from main.py's task if run.
+    cleanup_command = "rm -f hello.py snake_game.py script_1_to_10.py story.txt numbers.py output.txt || true"
+    print(f"Running cleanup: {cleanup_command}")
+    stdout, stderr, rc = run_shell(cleanup_command)
     print(f"Cleanup Stdout: {stdout.strip()}")
     print(f"Cleanup Stderr: {stderr.strip()}")
     print(f"Cleanup RC: {rc}")

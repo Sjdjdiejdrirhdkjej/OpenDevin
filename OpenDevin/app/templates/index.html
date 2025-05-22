@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenDevin Web</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        textarea { width: 98%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; }
+        input[type="submit"] { background-color: #5cb85c; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        input[type="submit"]:hover { background-color: #4cae4c; }
+        .section { margin-top: 20px; }
+        pre { background-color: #eee; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
+        .api-key-link { margin-top: 10px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OpenDevin Web Interface</h1>
+        <a href="{{ url_for('setup') }}" class="api-key-link">Setup API Key</a>
+
+        <form method="POST" action="{{ url_for('index') }}">
+            <h2>Enter Task:</h2>
+            <textarea name="task" rows="3" placeholder="e.g., Create a Python script that prints numbers from 1 to 10 and then run it.">{{ task_input }}</textarea>
+            <input type="submit" value="Run Task">
+        </form>
+
+        {% if plan %}
+        <div class="section">
+            <h2>Generated Plan:</h2>
+            <pre>{{ plan_str }}</pre>
+        </div>
+        {% endif %}
+
+        {% if execution_log %}
+        <div class="section">
+            <h2>Execution Log:</h2>
+            <pre>{{ execution_log_str }}</pre>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
